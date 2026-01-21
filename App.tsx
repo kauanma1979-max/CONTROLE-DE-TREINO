@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Exercise, Profile, WeekData, AppData } from './types';
+import { Exercise, Profile, WeekData, AppData } from './types.ts';
 
 const App: React.FC = () => {
   // --- State ---
@@ -25,22 +25,22 @@ const App: React.FC = () => {
   };
 
   /**
-   * Robust date formatter to prevent "one day off" errors caused by UTC/Local conversion
-   * For strings in format YYYY-MM-DD
+   * Formata a data de forma segura ignorando o fuso horário local
+   * Garante que se foi salvo "2025-06-06", mostre exatamente "06/06/2025"
    */
   const formatDateDisplay = (dateStr: string) => {
     if (!dateStr) return '--/--/----';
-    // If it's a full ISO string, extract just the date part first
-    const cleanDate = dateStr.split('T')[0];
-    const [year, month, day] = cleanDate.split('-');
+    // O input type="date" retorna YYYY-MM-DD
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length < 3) return dateStr;
+    const [year, month, day] = parts;
     return `${day}/${month}/${year}`;
   };
 
   const calculateEvolutionTime = (startDate: string) => {
     if (!startDate) return "0 dias";
-    // For calculation, we force it to be treated as local noon to avoid DST/Timezone issues shifting the day
-    const [year, month, day] = startDate.split('T')[0].split('-').map(Number);
-    const start = new Date(year, month - 1, day);
+    const parts = startDate.split('T')[0].split('-').map(Number);
+    const start = new Date(parts[0], parts[1] - 1, parts[2]);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -92,7 +92,6 @@ const App: React.FC = () => {
     localStorage.setItem('weekData', JSON.stringify(weekData));
   }, [profiles, currentProfileId, weekData]);
 
-  // --- Derived State ---
   const currentProfile = profiles[currentProfileId] || null;
   const exercises: Record<string, Exercise> = currentProfile?.exercises || {};
 
@@ -219,7 +218,91 @@ const App: React.FC = () => {
     }
   };
 
-  // --- UI Components ---
+  const ExerciseCard: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
+    const [weightInput, setWeightInput] = useState(exercise.currentWeight);
+    const updateDate = new Date(exercise.lastUpdated);
+
+    return (
+      <div className="exercise-card glass-card rounded-2xl p-6 flex flex-col transition-all-300 hover-elevate border border-slate-100 group h-full relative z-0">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex-1 pr-2">
+            <h3 className="font-black text-xl text-slate-900 leading-tight group-hover:text-blue-600 transition-colors uppercase tracking-tighter break-words">
+              {exercise.name}
+            </h3>
+            <span className="text-[10px] text-slate-400 block">Desde: {formatDateDisplay(exercise.dateAdded)}</span>
+          </div>
+          <div className="flex gap-1 shrink-0 relative z-20">
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setEditingExerciseId(exercise.id);
+                setIsEditExerciseModalOpen(true);
+              }}
+              className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all rounded-xl shadow-sm cursor-pointer"
+              title="Editar"
+            >
+              <i className="fas fa-edit text-sm"></i>
+            </button>
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleDeleteExercise(exercise.id);
+              }}
+              className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-xl shadow-sm cursor-pointer"
+              title="Deletar"
+            >
+              <i className="fas fa-trash text-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-slate-100/50 rounded-xl p-4 flex flex-col items-center mb-4">
+          <span className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Carga Atual</span>
+          <span className="text-4xl font-black text-blue-600 tracking-tighter">{exercise.currentWeight} <small className="text-lg">kg</small></span>
+          <span className="text-[9px] text-slate-400 mt-2 italic text-center">
+            At: {updateDate.toLocaleDateString()} {updateDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+
+        <div className="space-y-3 mt-auto">
+          <a 
+            href={exercise.videoUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-2 bg-rose-50 text-rose-600 rounded-lg font-bold text-xs hover:bg-rose-100 transition-colors relative z-10"
+          >
+            <i className="fab fa-youtube"></i> VER REFERÊNCIA
+          </a>
+          
+          <div className="pt-3 border-t border-slate-100 relative z-10">
+            <div className="flex gap-2">
+              <input 
+                type="number" 
+                value={weightInput}
+                onChange={(e) => setWeightInput(parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+              />
+              <button 
+                type="button"
+                onClick={(e) => {
+                   e.stopPropagation();
+                   handleUpdateWeight(exercise.id, weightInput);
+                }}
+                className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors shadow-md shadow-emerald-200 shrink-0 cursor-pointer"
+              >
+                <i className="fas fa-sync-alt"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const WeekTracker = () => {
     const daysOfWeek = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     const today = new Date();
@@ -283,379 +366,6 @@ const App: React.FC = () => {
               </div>
             );
           })}
-        </div>
-      </div>
-    );
-  };
-
-  const ExerciseCard: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
-    const [weightInput, setWeightInput] = useState(exercise.currentWeight);
-    const updateDate = new Date(exercise.lastUpdated);
-
-    return (
-      <div className="exercise-card glass-card rounded-2xl p-6 flex flex-col transition-all-300 hover-elevate border border-slate-100 group h-full relative">
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex-1 pr-2">
-            <h3 className="font-black text-xl text-slate-900 leading-tight group-hover:text-blue-600 transition-colors uppercase tracking-tighter break-words">
-              {exercise.name}
-            </h3>
-            <span className="text-[10px] text-slate-400 block">Desde: {formatDateDisplay(exercise.dateAdded)}</span>
-          </div>
-          <div className="flex gap-1 shrink-0">
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setEditingExerciseId(exercise.id);
-                setIsEditExerciseModalOpen(true);
-              }}
-              className="w-9 h-9 flex items-center justify-center bg-slate-100 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all rounded-xl z-10 shadow-sm"
-              title="Editar"
-            >
-              <i className="fas fa-edit text-sm"></i>
-            </button>
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleDeleteExercise(exercise.id);
-              }}
-              className="w-9 h-9 flex items-center justify-center bg-slate-100 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-xl z-10 shadow-sm"
-              title="Deletar"
-            >
-              <i className="fas fa-trash text-sm"></i>
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-slate-100/50 rounded-xl p-4 flex flex-col items-center mb-4">
-          <span className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Carga Atual</span>
-          <span className="text-4xl font-black text-blue-600 tracking-tighter">{exercise.currentWeight} <small className="text-lg">kg</small></span>
-          <span className="text-[9px] text-slate-400 mt-2 italic text-center">
-            At: {updateDate.toLocaleDateString()} {updateDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        </div>
-
-        <div className="space-y-3 mt-auto">
-          <a 
-            href={exercise.videoUrl} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-2 bg-rose-50 text-rose-600 rounded-lg font-bold text-xs hover:bg-rose-100 transition-colors"
-          >
-            <i className="fab fa-youtube"></i> VER REFERÊNCIA
-          </a>
-          
-          <div className="pt-3 border-t border-slate-100">
-            <div className="flex gap-2">
-              <input 
-                type="number" 
-                value={weightInput}
-                onChange={(e) => setWeightInput(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 outline-none"
-              />
-              <button 
-                type="button"
-                onClick={(e) => {
-                   e.stopPropagation();
-                   handleUpdateWeight(exercise.id, weightInput);
-                }}
-                className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors shadow-md shadow-emerald-200 shrink-0"
-              >
-                <i className="fas fa-sync-alt"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // --- Modals ---
-  const ProfileModal = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center glass-modal p-4" onClick={() => setIsProfileModalOpen(false)}>
-      <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-8 animate-fade-in" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-8 border-b pb-4">
-          <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Gerenciar Perfis</h3>
-          <button onClick={() => setIsProfileModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-2xl">&times;</button>
-        </div>
-
-        <form className="space-y-6" onSubmit={async (e) => {
-          e.preventDefault();
-          const form = e.target as HTMLFormElement;
-          const formData = new FormData(form);
-          const photoFile = formData.get('photo') as File;
-          let photoBase64 = null;
-          if (photoFile && photoFile.size > 0) {
-            photoBase64 = await fileToBase64(photoFile);
-          }
-
-          const profileId = 'profile_' + Date.now();
-          const profile: Profile = {
-            id: profileId,
-            name: formData.get('name') as string,
-            startDate: formData.get('startDate') as string,
-            weightInitial: parseFloat(formData.get('weightInitial') as string) || 0,
-            weightCurrent: parseFloat(formData.get('weightInitial') as string) || 0,
-            goalWeight: formData.get('goalWeight') ? parseFloat(formData.get('goalWeight') as string) : null,
-            photo: photoBase64,
-            notes: formData.get('notes') as string,
-            exercises: {},
-            createdAt: new Date().toISOString()
-          };
-          
-          setProfiles(prev => ({ ...prev, [profileId]: profile }));
-          setCurrentProfileId(profileId);
-          setIsProfileModalOpen(false);
-          showNotification('Perfil criado!');
-        }}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div className="col-span-1 md:col-span-2">
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Nome</label>
-                <input name="name" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Ex: João Musculação" />
-             </div>
-             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Foto do Perfil</label>
-                <input name="photo" type="file" accept="image/*" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none text-xs" />
-             </div>
-             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Data Início</label>
-                <input name="startDate" type="date" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={new Date().toISOString().split('T')[0]} />
-             </div>
-             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Peso Inicial (kg)</label>
-                <input name="weightInitial" type="number" step="0.1" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="0.0" />
-             </div>
-             <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Meta (kg)</label>
-                <input name="goalWeight" type="number" step="0.1" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Opcional" />
-             </div>
-             <div className="col-span-1 md:col-span-2">
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Notas/Objetivo</label>
-                <input name="notes" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Ex: Hipertrofia total" />
-             </div>
-          </div>
-          <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg uppercase tracking-widest">
-            Criar Perfil
-          </button>
-        </form>
-
-        <div className="mt-10">
-          <h4 className="font-bold text-slate-500 uppercase tracking-widest text-xs mb-4">Perfis Existentes</h4>
-          <div className="space-y-3">
-            {(Object.values(profiles) as Profile[]).map(p => (
-              <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full border border-slate-200 overflow-hidden bg-white flex items-center justify-center text-blue-500 font-bold shrink-0">
-                    {p.photo ? <img src={p.photo} className="w-full h-full object-cover" /> : p.name[0]}
-                  </div>
-                  <div>
-                    <div className="font-bold text-slate-800">{p.name}</div>
-                    <div className="text-[10px] text-slate-500 uppercase">{Object.keys(p.exercises).length} exercícios • {p.weightCurrent} kg</div>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => { setCurrentProfileId(p.id); setIsProfileModalOpen(false); }}
-                    className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-colors ${currentProfileId === p.id ? 'bg-blue-500 text-white' : 'bg-white text-blue-500 border border-blue-500'}`}
-                  >
-                    {currentProfileId === p.id ? 'Atual' : 'Selecionar'}
-                  </button>
-                  <button onClick={() => handleDeleteProfile(p.id)} className="text-rose-400 hover:text-rose-600 p-2" title="Deletar Perfil"><i className="fas fa-trash"></i></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const EditProfileModal = () => {
-    if (!currentProfile) return null;
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center glass-modal p-4" onClick={() => setIsEditProfileModalOpen(false)}>
-        <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl p-8 animate-fade-in" onClick={e => e.stopPropagation()}>
-          <div className="flex justify-between items-center mb-8 border-b pb-4">
-            <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Editar Perfil</h3>
-            <button onClick={() => setIsEditProfileModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-2xl">&times;</button>
-          </div>
-          <form className="space-y-6" onSubmit={async (e) => {
-            e.preventDefault();
-            const form = e.target as HTMLFormElement;
-            const formData = new FormData(form);
-            
-            const photoFile = formData.get('photo') as File;
-            let photoBase64 = currentProfile.photo;
-            if (photoFile && photoFile.size > 0) {
-              photoBase64 = await fileToBase64(photoFile);
-            }
-
-            setProfiles(prev => {
-              const next = { ...prev };
-              next[currentProfileId] = {
-                ...currentProfile,
-                name: formData.get('name') as string,
-                startDate: formData.get('startDate') as string,
-                weightInitial: parseFloat(formData.get('weightInitial') as string) || currentProfile.weightInitial,
-                weightCurrent: parseFloat(formData.get('weightCurrent') as string) || currentProfile.weightCurrent,
-                goalWeight: formData.get('goalWeight') ? parseFloat(formData.get('goalWeight') as string) : null,
-                notes: formData.get('notes') as string,
-                photo: photoBase64,
-              };
-              return next;
-            });
-            setIsEditProfileModalOpen(false);
-            showNotification('Perfil atualizado!');
-          }}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="col-span-1 md:col-span-2">
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Nome</label>
-                <input name="name" defaultValue={currentProfile.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-              <div className="col-span-1 md:col-span-2">
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Foto do Perfil (deixe vazio para manter)</label>
-                <input name="photo" type="file" accept="image/*" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none text-xs" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Data Início</label>
-                <input name="startDate" type="date" defaultValue={currentProfile.startDate} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Peso Inicial (kg)</label>
-                <input name="weightInitial" type="number" step="0.1" defaultValue={currentProfile.weightInitial} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Peso Atual (kg)</label>
-                <input name="weightCurrent" type="number" step="0.1" defaultValue={currentProfile.weightCurrent} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Meta (kg)</label>
-                <input name="goalWeight" type="number" step="0.1" defaultValue={currentProfile.goalWeight || ''} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Opcional" />
-              </div>
-              <div className="col-span-1 md:col-span-2">
-                <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Notas/Objetivo</label>
-                <input name="notes" defaultValue={currentProfile.notes} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-            </div>
-            <button type="submit" className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-slate-800 transition-all shadow-lg uppercase tracking-widest">
-              Salvar Alterações
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  const AddExerciseModal = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center glass-modal p-4" onClick={() => setIsAddExerciseModalOpen(false)}>
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-8 animate-fade-in" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Adicionar Exercício</h3>
-          <button onClick={() => setIsAddExerciseModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-2xl">&times;</button>
-        </div>
-        <form className="space-y-5" onSubmit={(e) => {
-          e.preventDefault();
-          const form = e.target as HTMLFormElement;
-          const formData = new FormData(form);
-          const exId = 'ex_' + Date.now();
-          const now = new Date().toISOString();
-          const exercise: Exercise = {
-            id: exId,
-            name: formData.get('name') as string,
-            videoUrl: formData.get('videoUrl') as string,
-            currentWeight: parseFloat(formData.get('weight') as string) || 0,
-            dateAdded: now,
-            lastUpdated: now
-          };
-          
-          setProfiles(prev => {
-            if (!prev[currentProfileId]) return prev;
-            const next = { ...prev };
-            const profile = { ...next[currentProfileId] };
-            profile.exercises = { ...profile.exercises, [exId]: exercise };
-            next[currentProfileId] = profile;
-            return next;
-          });
-          
-          setIsAddExerciseModalOpen(false);
-          showNotification('Exercício salvo!');
-        }}>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Nome do Exercício</label>
-            <input name="name" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" placeholder="Ex: Agachamento Livre" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Link YouTube</label>
-            <input name="videoUrl" type="url" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" placeholder="https://youtube.com/..." />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Peso Inicial (kg)</label>
-            <input name="weight" type="number" step="0.5" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" placeholder="0.0" />
-          </div>
-          <button type="submit" className="w-full bg-emerald-500 text-white font-bold py-4 rounded-2xl hover:bg-emerald-600 transition-all shadow-lg uppercase tracking-widest">
-            Salvar Exercício
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-
-  const EditExerciseModal = () => {
-    if (!editingExerciseId || !currentProfile) return null;
-    const exercise = currentProfile.exercises[editingExerciseId];
-    if (!exercise) return null;
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center glass-modal p-4" onClick={() => setIsEditExerciseModalOpen(false)}>
-        <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-8 animate-fade-in" onClick={e => e.stopPropagation()}>
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Editar Exercício</h3>
-            <button onClick={() => setIsEditExerciseModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-2xl">&times;</button>
-          </div>
-          <form className="space-y-5" onSubmit={(e) => {
-            e.preventDefault();
-            const form = e.target as HTMLFormElement;
-            const formData = new FormData(form);
-            
-            setProfiles(prev => {
-              if (!prev[currentProfileId]) return prev;
-              const next = { ...prev };
-              const profile = { ...next[currentProfileId] };
-              const exMap = { ...profile.exercises };
-              exMap[editingExerciseId] = {
-                ...exercise,
-                name: formData.get('name') as string,
-                videoUrl: formData.get('videoUrl') as string,
-                currentWeight: parseFloat(formData.get('weight') as string) || exercise.currentWeight,
-                lastUpdated: new Date().toISOString()
-              };
-              profile.exercises = exMap;
-              next[currentProfileId] = profile;
-              return next;
-            });
-            
-            setIsEditExerciseModalOpen(false);
-            showNotification('Exercício atualizado!');
-          }}>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Nome do Exercício</label>
-              <input name="name" defaultValue={exercise.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Link YouTube</label>
-              <input name="videoUrl" type="url" defaultValue={exercise.videoUrl} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Carga Atual (kg)</label>
-              <input name="weight" type="number" step="0.5" defaultValue={exercise.currentWeight} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" />
-            </div>
-            <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg uppercase tracking-widest">
-              Salvar Alterações
-            </button>
-          </form>
         </div>
       </div>
     );
@@ -816,10 +526,284 @@ const App: React.FC = () => {
         </div>
       </footer>
 
-      {isProfileModalOpen && <ProfileModal />}
-      {isEditProfileModalOpen && <EditProfileModal />}
-      {isAddExerciseModalOpen && <AddExerciseModal />}
-      {isEditExerciseModalOpen && <EditExerciseModal />}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center glass-modal p-4" onClick={() => setIsProfileModalOpen(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-8 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-8 border-b pb-4">
+              <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Gerenciar Perfis</h3>
+              <button onClick={() => setIsProfileModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-2xl">&times;</button>
+            </div>
+
+            <form className="space-y-6" onSubmit={async (e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const formData = new FormData(form);
+              const photoFile = formData.get('photo') as File;
+              let photoBase64 = null;
+              if (photoFile && photoFile.size > 0) {
+                photoBase64 = await fileToBase64(photoFile);
+              }
+
+              const profileId = 'profile_' + Date.now();
+              const profile: Profile = {
+                id: profileId,
+                name: formData.get('name') as string,
+                startDate: formData.get('startDate') as string,
+                weightInitial: parseFloat(formData.get('weightInitial') as string) || 0,
+                weightCurrent: parseFloat(formData.get('weightInitial') as string) || 0,
+                goalWeight: formData.get('goalWeight') ? parseFloat(formData.get('goalWeight') as string) : null,
+                photo: photoBase64,
+                notes: formData.get('notes') as string,
+                exercises: {},
+                createdAt: new Date().toISOString()
+              };
+              
+              setProfiles(prev => ({ ...prev, [profileId]: profile }));
+              setCurrentProfileId(profileId);
+              setIsProfileModalOpen(false);
+              showNotification('Perfil criado!');
+            }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div className="col-span-1 md:col-span-2">
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Nome</label>
+                    <input name="name" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Ex: João Musculação" />
+                 </div>
+                 <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Foto do Perfil</label>
+                    <input name="photo" type="file" accept="image/*" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none text-xs" />
+                 </div>
+                 <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Data Início</label>
+                    <input name="startDate" type="date" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" defaultValue={new Date().toISOString().split('T')[0]} />
+                 </div>
+                 <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Peso Inicial (kg)</label>
+                    <input name="weightInitial" type="number" step="0.1" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="0.0" />
+                 </div>
+                 <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Meta (kg)</label>
+                    <input name="goalWeight" type="number" step="0.1" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Opcional" />
+                 </div>
+                 <div className="col-span-1 md:col-span-2">
+                    <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Notas/Objetivo</label>
+                    <input name="notes" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Ex: Hipertrofia total" />
+                 </div>
+              </div>
+              <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg uppercase tracking-widest">
+                Criar Perfil
+              </button>
+            </form>
+
+            <div className="mt-10">
+              <h4 className="font-bold text-slate-500 uppercase tracking-widest text-xs mb-4">Perfis Existentes</h4>
+              <div className="space-y-3">
+                {(Object.values(profiles) as Profile[]).map(p => (
+                  <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-blue-200 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full border border-slate-200 overflow-hidden bg-white flex items-center justify-center text-blue-500 font-bold shrink-0">
+                        {p.photo ? <img src={p.photo} className="w-full h-full object-cover" /> : p.name[0]}
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-800">{p.name}</div>
+                        <div className="text-[10px] text-slate-500 uppercase">{Object.keys(p.exercises).length} exercícios • {p.weightCurrent} kg</div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => { setCurrentProfileId(p.id); setIsProfileModalOpen(false); }}
+                        className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-colors ${currentProfileId === p.id ? 'bg-blue-500 text-white' : 'bg-white text-blue-500 border border-blue-500'}`}
+                      >
+                        {currentProfileId === p.id ? 'Atual' : 'Selecionar'}
+                      </button>
+                      <button onClick={() => handleDeleteProfile(p.id)} className="text-rose-400 hover:text-rose-600 p-2" title="Deletar Perfil"><i className="fas fa-trash"></i></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEditProfileModalOpen && currentProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center glass-modal p-4" onClick={() => setIsEditProfileModalOpen(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl p-8 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-8 border-b pb-4">
+              <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Editar Perfil</h3>
+              <button onClick={() => setIsEditProfileModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-2xl">&times;</button>
+            </div>
+            <form className="space-y-6" onSubmit={async (e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const formData = new FormData(form);
+              
+              const photoFile = formData.get('photo') as File;
+              let photoBase64 = currentProfile.photo;
+              if (photoFile && photoFile.size > 0) {
+                photoBase64 = await fileToBase64(photoFile);
+              }
+
+              setProfiles(prev => {
+                const next = { ...prev };
+                next[currentProfileId] = {
+                  ...currentProfile,
+                  name: formData.get('name') as string,
+                  startDate: formData.get('startDate') as string,
+                  weightInitial: parseFloat(formData.get('weightInitial') as string) || currentProfile.weightInitial,
+                  weightCurrent: parseFloat(formData.get('weightCurrent') as string) || currentProfile.weightCurrent,
+                  goalWeight: formData.get('goalWeight') ? parseFloat(formData.get('goalWeight') as string) : null,
+                  notes: formData.get('notes') as string,
+                  photo: photoBase64,
+                };
+                return next;
+              });
+              setIsEditProfileModalOpen(false);
+              showNotification('Perfil atualizado!');
+            }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="col-span-1 md:col-span-2">
+                  <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Nome</label>
+                  <input name="name" defaultValue={currentProfile.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
+                </div>
+                <div className="col-span-1 md:col-span-2">
+                  <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Foto do Perfil (deixe vazio para manter)</label>
+                  <input name="photo" type="file" accept="image/*" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none text-xs" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Data Início</label>
+                  <input name="startDate" type="date" defaultValue={currentProfile.startDate} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Peso Inicial (kg)</label>
+                  <input name="weightInitial" type="number" step="0.1" defaultValue={currentProfile.weightInitial} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Peso Atual (kg)</label>
+                  <input name="weightCurrent" type="number" step="0.1" defaultValue={currentProfile.weightCurrent} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Meta (kg)</label>
+                  <input name="goalWeight" type="number" step="0.1" defaultValue={currentProfile.goalWeight || ''} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Opcional" />
+                </div>
+                <div className="col-span-1 md:col-span-2">
+                  <label className="block text-sm font-bold text-slate-700 mb-1 uppercase tracking-wider">Notas/Objetivo</label>
+                  <input name="notes" defaultValue={currentProfile.notes} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none" />
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-slate-800 transition-all shadow-lg uppercase tracking-widest">
+                Salvar Alterações
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isAddExerciseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center glass-modal p-4" onClick={() => setIsAddExerciseModalOpen(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-8 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Adicionar Exercício</h3>
+              <button onClick={() => setIsAddExerciseModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-2xl">&times;</button>
+            </div>
+            <form className="space-y-5" onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const formData = new FormData(form);
+              const exId = 'ex_' + Date.now();
+              const now = new Date().toISOString();
+              const exercise: Exercise = {
+                id: exId,
+                name: formData.get('name') as string,
+                videoUrl: formData.get('videoUrl') as string,
+                currentWeight: parseFloat(formData.get('weight') as string) || 0,
+                dateAdded: now,
+                lastUpdated: now
+              };
+              
+              setProfiles(prev => {
+                if (!prev[currentProfileId]) return prev;
+                const next = { ...prev };
+                const profile = { ...next[currentProfileId] };
+                profile.exercises = { ...profile.exercises, [exId]: exercise };
+                next[currentProfileId] = profile;
+                return next;
+              });
+              
+              setIsAddExerciseModalOpen(false);
+              showNotification('Exercício salvo!');
+            }}>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Nome do Exercício</label>
+                <input name="name" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" placeholder="Ex: Agachamento Livre" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Link YouTube</label>
+                <input name="videoUrl" type="url" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" placeholder="https://youtube.com/..." />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Peso Inicial (kg)</label>
+                <input name="weight" type="number" step="0.5" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" placeholder="0.0" />
+              </div>
+              <button type="submit" className="w-full bg-emerald-500 text-white font-bold py-4 rounded-2xl hover:bg-emerald-600 transition-all shadow-lg uppercase tracking-widest">
+                Salvar Exercício
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isEditExerciseModalOpen && currentProfile && editingExerciseId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center glass-modal p-4" onClick={() => setIsEditExerciseModalOpen(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-8 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Editar Exercício</h3>
+              <button onClick={() => setIsEditExerciseModalOpen(false)} className="text-slate-400 hover:text-slate-900 text-2xl">&times;</button>
+            </div>
+            <form className="space-y-5" onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const formData = new FormData(form);
+              const exercise = currentProfile.exercises[editingExerciseId];
+              
+              setProfiles(prev => {
+                if (!prev[currentProfileId]) return prev;
+                const next = { ...prev };
+                const profile = { ...next[currentProfileId] };
+                const exMap = { ...profile.exercises };
+                exMap[editingExerciseId] = {
+                  ...exercise,
+                  name: formData.get('name') as string,
+                  videoUrl: formData.get('videoUrl') as string,
+                  currentWeight: parseFloat(formData.get('weight') as string) || exercise.currentWeight,
+                  lastUpdated: new Date().toISOString()
+                };
+                profile.exercises = exMap;
+                next[currentProfileId] = profile;
+                return next;
+              });
+              
+              setIsEditExerciseModalOpen(false);
+              showNotification('Exercício atualizado!');
+            }}>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Nome do Exercício</label>
+                <input name="name" defaultValue={currentProfile.exercises[editingExerciseId]?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Link YouTube</label>
+                <input name="videoUrl" type="url" defaultValue={currentProfile.exercises[editingExerciseId]?.videoUrl} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Carga Atual (kg)</label>
+                <input name="weight" type="number" step="0.5" defaultValue={currentProfile.exercises[editingExerciseId]?.currentWeight} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg uppercase tracking-widest">
+                Salvar Alterações
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {notification && (
         <div className={`fixed bottom-8 right-8 z-[100] px-6 py-4 rounded-2xl shadow-2xl animate-slide-in flex items-center gap-3 font-bold text-white ${
